@@ -1,0 +1,106 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:context="http://www.springframework.org/schema/context" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+	http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.2.xsd
+	http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.2.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.2.xsd
+	http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util-4.2.xsd">
+
+	<!-- 声明注解扫描器 扫面service注解所在的包 -->
+	<context:component-scan base-package="com.qicheng.ssm.service" />
+	<context:component-scan base-package="com.qicheng.ssm.dao" />
+	<!-- 事物生效扫描,将Controller注解去掉 -->
+	<!-- <context:component-scan base-package="com.qicheng.ssm"> <context:exclude-filter 
+		type="annotation" expression="org.springframework.stereotype.Controller" 
+		/> </context:component-scan> -->	
+		
+		<!-- 引入redis配置 -->
+	<import resource="applicationContext-catch.xml"/>
+
+	<!-- 加载属性配置文件 -->
+	<context:property-placeholder location="classpath:conf/jdbc.properties" />
+
+
+	<!-- 声明数据源dataSource 使用druid数据库连接池 -->
+	<bean id="dataSource1" class="com.alibaba.druid.pool.DruidDataSource"
+		init-method="init" destroy-method="close">
+		<property name="url" value="${jdbc.url}" />
+		<property name="username" value="${jdbc.user}" />
+		<property name="password" value="${jdbc.password}" />
+	</bean>
+
+	<!-- 创建sqlSessionFactory -->
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<!-- 指定数据源DataSource -->
+		<property name="dataSource" ref="dataSource1" />
+		<!-- 指定mybatis主配置文件 -->
+		<!--  <property name="configLocation" value="classpath:conf/mybatis.xml"></property>  -->
+		<!-- 加载mybatis的全局配置文件 -->
+		  <property name="configLocation" value="classpath:conf/SqlMapConfig.xml" 
+			/>  
+		 <!-- <property name="plugins">
+			<array>
+				<bean class="com.github.pagehelper.PageInterceptor">
+					<property name="properties">
+						<value>
+							dialect=mysql
+							reasonable=true
+						</value>
+					</property>
+				</bean>
+			</array>
+		</property>  -->
+		
+	</bean>
+
+	<!-- 使用MyBatis的动态代理，创建Dao接口的实现类对象 -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<!-- 指定SQLSessionFactor -->
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+		<!-- 指定DAO所在的包 -->
+		<property name="basePackage" value="com.qicheng.ssm.dao" />
+	</bean>
+
+	<!-- 配置事务管理器 -->
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource1" />
+	</bean>
+
+	<!-- 注解方式配置事务 -->
+	<!-- <tx:annotation-driven transaction-manager="transactionManager" /> -->
+
+	<!-- 拦截器方式配置事物 --><!-- 通知 -->
+	<tx:advice id="transactionAdvice" transaction-manager="transactionManager">
+		<tx:attributes>
+			<tx:method name="import*" propagation="REQUIRED" />
+			<tx:method name="delete*" propagation="REQUIRED" />
+			<tx:method name="update*" propagation="REQUIRED" /><!-- 有事物则使用该事物 
+				,无事物则开启新事物 -->
+			<tx:method name="get*" propagation="SUPPORTS" /><!-- 有事物则使用该事物 
+				,无事物则不开启新事物 -->
+		</tx:attributes>
+	</tx:advice>
+	<!-- 切面 -->
+	<aop:config>
+		<aop:advisor advice-ref="transactionAdvice"
+			pointcut="execution(* com.qicheng.ssm.service.*.*(..))" />
+	</aop:config>
+
+	<!-- aop -->
+	<bean id="logHandler" class="com.qicheng.ssm.aop.LogHander" />
+	<aop:config>
+
+		<aop:aspect id="time" ref="logHandler">
+			<aop:pointcut id="addAllMethod"
+				expression="execution(* com.qicheng.ssm.service.impl.*.*(..))" />
+			<aop:before method="doBefore" pointcut-ref="addAllMethod" />
+			<aop:after method="after" pointcut-ref="addAllMethod" />
+			<aop:around method="around" pointcut-ref="addAllMethod" />
+			<aop:after-returning returning="obj" method="afterReturn"
+				pointcut-ref="addAllMethod" />
+		</aop:aspect>
+	</aop:config>
+
+</beans>
